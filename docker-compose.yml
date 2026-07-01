@@ -1,7 +1,7 @@
 services:
   nginx:
     image: nginx:latest
-    container_name: laravel_nginx
+    container_name: ${PROJECT_NAME}_NGNIX
     restart: unless-stopped
     ports:
       - "80:80"
@@ -17,7 +17,7 @@ services:
   php:
     build:
       context: ./config/php-fpm
-    container_name: laravel_php
+    container_name: ${PROJECT_NAME}_PHP_FPM
     restart: unless-stopped
     working_dir: /var/www
     volumes:
@@ -27,62 +27,65 @@ services:
     ports:
       - "9000:9000"
     depends_on:
-      - mysql
+      - mysqldb
       - redis
       - rabbitmq
     networks:
       - lempnet
 
-  mysql:
-    image: mysql:8.0
-    container_name: laravel_mysql
-    restart: unless-stopped
-    ports:
-      - "3476:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: laravel
-      MYSQL_USER: laravel
-      MYSQL_PASSWORD: root
-      MYSQL_ROOT_HOST: "%"
-    command: --default-authentication-plugin=mysql_native_password
-    volumes:
-      - ./data/mysql:/var/lib/mysql
-    networks:
-      - lempnet
+  mysqldb:
+      container_name: ${PROJECT_NAME}_MYSQL
+      image: 'mysql:8.0.41'
+      volumes:
+          - './data/mysql:/var/lib/mysql'
+      restart: on-failure
+      environment:
+          - MYSQL_ROOT_HOST=${MYSQL_HOST}
+          - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+          - MYSQL_USER=${MYSQL_USER}
+          - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+          - MYSQL_DATABASE=${MYSQL_DATABASE}
+          - INNODB_FAST_SHUTDOWN=0
+      ports:
+          - '${MYSQL_PORT}:3306'
+      expose:
+          - '${MYSQL_PORT}'    
+      networks:
+          - lempnet
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: laravel_phpmyadmin
-    restart: unless-stopped
-    ports:
-      - "8060:80"
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: laravel
-      PMA_PASSWORD: root
-      UPLOAD_LIMIT: 300M
-    depends_on:
-      - mysql
-    networks:
-      - lempnet
+      container_name: ${PROJECT_NAME}_PHPMYADMIN
+      image: phpmyadmin/phpmyadmin
+      restart: on-failure
+      ports:
+          - '8060:80'
+      environment:
+          - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+          - PMA_HOST=mysqldb
+          - UPLOAD_LIMIT=300M
+      depends_on:
+          - mysqldb
+      networks:
+          - lempnet 
 
   redis:
-    image: redis:7-alpine
-    container_name: laravel_redis
-    restart: unless-stopped
-    command: redis-server --requirepass atbRedis
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./data/redis:/data
-    networks:
-      - lempnet
+      container_name: ${PROJECT_NAME}_REDIS
+      image: "redis:alpine"
+      restart: on-failure
+      command: redis-server --requirepass "${REDIS_PASSWORD}"
+      ports:
+          - "6379:6379"
+      volumes:
+          - './data/redis:/var/lib/redis'
+          - './config/redis/redis.conf:/usr/local/etc/redis/redis.conf'
+      environment:
+          - REDIS_REPLICATION_MODE=master
+      networks:
+          - lempnet  
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: laravel_rabbitmq
+    container_name: ${PROJECT_NAME}_rabbitmq
     restart: unless-stopped
     hostname: rabbitmq
     environment:
